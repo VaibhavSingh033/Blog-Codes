@@ -1,0 +1,134 @@
+---
+title: "Data Blogs for beginners"
+subtitle: "If this is your first time - Come right here !" 
+author: "Vaibhav Singh"
+date: 2019-11-15T21:13:14-05:00
+categories: ["Data Blogs"]
+tags: ["Intro", "regression"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = FALSE,comment = NA)
+theme_set(theme_minimal())
+```
+
+# Introduction
+
+This is a sample data blog, where in I will be working with one of the most famous & processed dataset in Data analytics & ML community ```mtcars```. The comments & workings would be around the dataset, hence it is advisable to go through the dataset once. <br/>
+
+mtcars dataset --> 32 rows & 11 columns, column names as below:
+
+```
+[, 1]   mpg     Miles/(US) gallon
+[, 2]   cyl     Number of cylinders
+[, 3]   disp    Displacement (cu.in.)
+[, 4]   hp      Gross horsepower
+[, 5]   drat    Rear axle ratio
+[, 6]   wt      Weight (lb/1000)
+[, 7]   qsec    1/4 mile time
+[, 8]   vs      Engine (0 = V-shaped, 1 = straight)
+[, 9]   am      Transmission (0 = automatic, 1 = manual)
+[,10]   gear    Number of forward gears
+[,11]   carb    Number of carburetors
+```
+> mtcars dataset <br/>
+[Download data set here](https://gist.github.com/seankross/a412dfbd88b3db70b74b)<br/>
+[Read about the variables here](https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/mtcars.html)
+
+
+# Break the Syntax 
+This is an important section, if you want to just skim through what I have done & not getting details of things.  
+
+```{r}
+#Anything written under this grey box is R Code & its output 
+```
+
+```Anything written like this is the comment on output produced```
+
+Anything written like this is [hyperlinked](vaibhavsingh.netlify.com/sample) for further readings <br/>
+
+> Anything written like this is to just get your attention
+
+Anything left are the Images or output produced <font size="2"> (I am sure you can identify them :)</font>  For example refer plot \@ref(fig:pie)
+
+```{r pie, fig.cap='A fancy pie chart.', tidy=FALSE, echo=FALSE}
+par(mar = c(0, 1, 0, 1))
+pie(
+  c(280, 60, 20),
+  c('Sky', 'Sunny side of pyramid', 'Shady side of pyramid'),
+  col = c('#0292D8', '#F7EA39', '#C4B632'),
+  init.angle = -50, border = NA
+)
+```
+
+
+## Lets get started
+
+### Data Exploration
+
+The initial bit where we are getting familiar with dataset is called ```Data Exploration``` phase. In this stage, we check the dimensions (rows,columns) of the dataset, view first few rows to get an idea of how data is structured, check summary alongside plethora of other steps. Let's do some exploration on mtcars dataset. <br/>
+
+1. Checking the dimensions then Viewing the first 10 rows of the data
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(broom)
+library(knitr)
+library(printr)
+
+dim(mtcars)
+kable(head(mtcars),align = 'c')
+```
+
+
+```We observe that the dataset contains 32 rows & 11 columns. The column names are shortened due to lengthy names but a fair idea can be derived from that they could mean. (To read more about description of variable click link mentioned above)
+```
+
+> For ex:- <br/> mpg --> Miles/(US) gallon <br/>
+disp --> Displacement (cu.in.)
+
+2. Summary & structure of the dataset <br/>
+
+```{r}
+str(mtcars)
+
+summary(mtcars)
+```
+
+```Here we explore two other things related to dataset```
+
+
+1. The structure of the mtcars data, which we can are all numeric column. To read up more on data structures, check this [link](https://swcarpentry.github.io/r-novice-inflammation/13-supp-data-structures/)
+
+2. The summary of the dataset, since all columns are numeric we get to see an overview of broad stastical parameters like mean, median, mode etc. 
+
+
+# Data Visualization
+
+Let's say we want to analyse what is the relationship between mpg(miles per gallon) & hp (horse power) in different cyl (cylinder types)
+
+```{r}
+mtcars %>% 
+  ggplot(aes(x=mpg, y=hp, color=as.factor(cyl)))+
+  geom_point()+
+  labs(title="Relationship between mpg & hp",
+       subtitle = "We can observe that as number of cylinders increases so does mpg but horse power decreases",
+       x="Miles Per Gallon",
+       y="Gross Horse Power ",
+       color="Number of cylinders")
+```
+
+# Linear Regression
+
+This would be the last section for this intro post. Lets quickly see that if we have to predict mpg using all other variables which variable would be most important feature in our prediction. While there are many alogrithms to do this, we would be using linear regression in this post. 
+
+```{r}
+head(mtcars)
+
+linear <- lm(mpg~. , data=mtcars)
+
+tidy(summary(linear))
+```
+
+```Above, we can see that wt is the most important predictor as its p-value is the lowest. (Well, its not so simple, but we'll call off at this point this as of now)```
+
+### That's all Folks for the intro post. This was just an intro post to get first timers familiar with the syntax & flow of the data blogs. Incase, you would love to explore more detailed & advanced posts, head over to other post from home page 

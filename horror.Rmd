@@ -1,0 +1,186 @@
+---
+title: "Horror Movies - Scatter Plot"
+author: "Vaibhav Singh"
+subtitle: "Analysis & visualization of Horror Movies dataset - Source IMDB" 
+date: 2019-11-17T21:13:14-05:00
+categories:  ["Data Blogs"]
+tags: ["Data Visualisation", "Data Analysis","Scatterplot"]
+---
+
+# Horror Movies Data Analysis 
+## Before getting started
+Read more about data set [here](https://www.kaggle.com/PromptCloudHQ/imdb-horror-movie-dataset)
+
+Seeking to get answers for below based on dataset:<br/>
+
+1. Do higher budget horror movies better rated ?-- refer plot \@ref(fig:1)<br/> 
+2. Are horror movies in general have lower rating ? -- refer plot \@ref(fig:2)<br/>
+3. Have horror movies gotten better & lengthier over time ?-- refer plot \@ref(fig:3)<br/>
+4. Which words appear most often in Horror movies plots ? -- refer plot \@ref(fig:4)<br/>
+
+
+## Lets get started
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+
+#Loading Libraries  
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(ggforce)
+library(cowplot)
+library(stringr)
+library(tidyverse)
+library(extrafont)
+library(DT)
+library(printr)
+library(knitr)
+library(tidytext)
+library(ggthemes)
+library(reactable)
+theme_set(theme_minimal())
+
+horror_movies_raw <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-10-22/horror_movies.csv")
+
+```
+
+1. Viewing Sample Data 
+```{r, echo=FALSE}
+reactable(horror_movies_raw,wrap = FALSE, bordered = TRUE, highlight = TRUE,searchable = TRUE, minRows = 10,resizable = TRUE)
+```
+
+```The data is uncleaned with many values as NA, need to preprocess before moving to next step```
+
+2. Cleaning the data (code posted at my github) 
+```{r include=FALSE, message=FALSE, warning=FALSE,echo=TRUE}
+horror_movies <- horror_movies_raw %>%
+  extract(title, "year", "\\((\\d\\d\\d\\d)\\)$", remove = FALSE, convert = TRUE) %>%
+  mutate(budget = parse_number(budget), movie_run_time=parse_number(movie_run_time), time=round(movie_run_time/60,1),time=case_when(time<1~"<= 1 Hour",time>1&time<1.5 ~ "1 to 1.5, Hours",time>=1.5&time<2~"1.5 to 2 Hours",time>=2~"> 2 Hours"                                                                                                                              )) %>%
+  separate(plot, c("director", "cast_sentence", "plot"), extra = "merge", sep = "\\. ", fill = "right") %>%
+  distinct(title, .keep_all = TRUE)
+
+horror_movies <- horror_movies %>% 
+  dplyr::mutate(
+    time = as.factor(time),
+    time = fct_collapse(time,
+                        `<= 1 Hour` = c("<= 1 Hour"),
+                        `1 to 1.5, Hours` = c("1 to 1.5, Hours"),
+                        `1.5 to 2 Hours` = c("1.5 to 2 Hours"),
+                        `> 2 Hours` = c("> 2 Hours")),
+    time = fct_relevel(time,
+                       "<= 1 Hour",
+                       "1 to 1.5, Hours",
+                       "1.5 to 2 Hours",
+                       "> 2 Hours"))
+```
+
+
+3. Data Exploration Section
+
+
+```{r 1, fig.cap='No relation ship between Budget & ratings',message=FALSE, warning=FALSE, echo=FALSE}
+horror_movies %>% 
+  ggplot(aes(budget, review_rating))+
+  geom_point()+
+  scale_x_log10(labels = scales::dollar)+
+  geom_smooth(method="lm")+
+  theme_minimal()+
+  labs(title="Do higher budget movies end up being higher rated ?",
+       x="Movie Budget",
+       y="Movie rating (0 - 10)")
+```
+
+
+```{r 2, fig.cap='Ratings are generally Normally distributed',message=FALSE, warning=FALSE, echo=FALSE}
+horror_movies %>% 
+  ggplot(aes(review_rating))+
+  geom_histogram(colour = "black", 
+                   fill = "blue")+
+  theme_minimal()+
+  stat_function(fun = function(x) 
+    dnorm(x, mean = mean(horror_movies$review_rating), sd = sd(horror_movies$review_rating)))+
+  labs(title="Distribution of Movie Ratings", 
+       x="Movie rating (0 - 10)",
+       y="Frequency")
+
+```
+
+Yearwise change in rating 
+```{r 3, message=FALSE, warning=FALSE,fig.cap='Yes! Horror movies gotten better over years & have they gotten shorter in length', tidy=FALSE, include=TRUE, echo=FALSE}
+horror_movies <- horror_movies %>% inner_join(horror_movies %>% group_by(year) %>% summarise(avg_rating=round(mean(review_rating,na.rm=TRUE),1))) 
+
+total_avg<-mean(horror_movies$review_rating,na.rm=TRUE)
+
+plot <-horror_movies %>% 
+  filter(year>2008)  %>% 
+  ggplot(aes(as.factor(year),review_rating))+
+  geom_jitter(aes(color=as.factor(time)), size=5, alpha = 0.15, width = 0.15)+
+  geom_mark_circle(x=8.901,y=9.8189, color='grey50', label.fill = NA, expand = unit(3, "mm"))+
+  geom_mark_circle(x=9.03,y=5.7, color='grey50', label.fill = NA, expand = unit(3, "mm"))+
+  scale_y_continuous(limits=c(0,10))+
+  geom_segment(aes(x = as.factor(year), xend = as.factor(year),y = total_avg, yend = avg_rating), size = 0.5, color='gray30')+
+    geom_point(mapping=aes(x=as.factor(year), y=avg_rating, fill=as.factor(year)), color="gray30", shape=21, size=3, stroke=1)+
+  geom_hline(aes(yintercept = total_avg), color = "gray30", size = 0.5)+
+  annotate("text", x = 7.901, y = 9.9409, fontface="bold",size=3, label ='	Bonehill Road')+
+  annotate("text", y = 1.0, x = 8.1409, fontface="bold", size=3,label ='	Countrycide')+
+  annotate("text", y = 5.7, x = 8.63,size=3,  label ='	Most Expensive Horror Film')+
+  annotate("text", y = 5.7, x = 8.33,fontface="bold", size=3, label ='	Ghouls($162M) ')+
+  coord_flip()+
+  theme_minimal()+
+  theme(
+    title=element_text(face="bold",family = "Waltograph UI",size=11),
+    plot.subtitle=element_text(face="italic",family = "garamond",size=9),
+    axis.title=element_text(face="bold",size=9,family = "garamond"),
+    axis.text.y=element_text(size=12,family = "garamond")
+  )+
+  guides( fill = FALSE)+
+  labs(
+    title="Horror Movie ratings based on IMDB for last 10 years !",
+    subtitle="Quite clear that in general horror movies ratings have gotten better, not much change in length of movie",
+    x="Year",
+    y='Ratings',
+    color="Duration of Movies"
+  )+
+  theme(legend.position = "bottom")
+#create arrows for annotations
+arrows <- tibble(
+  x1 = c(8.92,8.92   ),
+  x2 = c(8.001,8.201    ),
+  y1 = c(9.7709,1.0    ),
+  y2 = c(9.9409,0.85   ) )
+plot_final <- plot + geom_curve(data = arrows, aes(x = x1, y = y1, xend = x2, yend = y2),
+                    arrow = arrow(length = unit(0.07, "inch")), size = 0.6,
+                    color = "gray20", curvature = -0.25)
+plot_final
+```
+
+
+```{r 4, message=FALSE, warning=FALSE,fig.cap='Words that occur most often in horror movie plot', tidy=FALSE, include=TRUE, echo=FALSE}
+
+
+horror_movies_unnested <- horror_movies %>%
+  unnest_tokens(word, plot) %>%
+  anti_join(stop_words, by = "word") %>%
+  filter(!is.na(word))
+
+horror_movies_unnested %>%
+  filter(!is.na(review_rating)) %>%
+  group_by(word) %>%
+  summarize(movies = dplyr::n(),
+            avg_rating = mean(review_rating)) %>%
+  arrange(desc(movies)) %>%
+  filter(movies >= 150) %>%
+  mutate(word = fct_reorder(word, avg_rating)) %>%
+  ggplot(aes(avg_rating, word)) +
+  geom_point(aes(color=as.factor(avg_rating)))+
+  labs(title="Words that frequently occur in higher rated horror movies",
+       subtitle = "Words like Life, death, film & woman occur in higher rated horror movies, however words like evil, friends, haunted often appear in lower rated horror movies",
+       x="Average Movie rating",
+       y="Words",
+       color="")+
+   theme_hc()+
+   theme(legend.position="none")
+
+
+```
+

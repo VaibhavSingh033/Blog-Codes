@@ -1,0 +1,85 @@
+---
+title: Simpson Guest Stars - Interactive Tree
+author: Vaibhav Singh
+date: '2019-11-17'
+slug: interactive-tree
+categories:  ["Data Blogs"]
+tags: ["Data Visualisation","Tree"]
+toc: FALSE  
+subtitle: "Analysis of a Simpson dataset - Source Wikipedia"
+---
+
+
+```{r global options, include = FALSE}
+knitr::opts_chunk$set(echo=TRUE, include = TRUE, warning=FALSE, message=FALSE)
+```
+# Simpsons Guest Stars
+
+## Before getting started
+Seeking to get answers for below based on dataset:<br/>
+1. Which Season did maximum guest stars feature in? -- refer plot \@ref(fig:1)<br/> 
+2. Who were the guest stars with maximum appearance on the Simpsons? -- refer plot \@ref(fig:2)<br/>
+
+## Lets get started
+
+Read more about data set [here](https://github.com/rfordatascience/tidytuesday/tree/master/data/2019/2019-08-27)
+
+```{r echo=FALSE, warning=FALSE}
+# Load libraries
+library(tidyverse)
+library(collapsibleTree) 
+library(htmlwidgets)
+library(knitr)
+library(printr)
+theme_set(theme_minimal())
+simpsons <- readr::read_delim("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-08-27/simpsons-guests.csv", delim = "|", quote = "") %>% mutate(self = str_detect(role, "self|selves"),
+         season = parse_number(season))
+
+```
+
+Previewing the data
+```{r echo=FALSE}
+kable(head(simpsons))
+```
+
+1. Which Season did maximum guest stars feature in ?
+```{r 1, fig.cap='It seems Season 20 onwards frequency of guest stars started increasing',message=FALSE, warning=FALSE, echo=FALSE}
+simpsons %>% count(season) %>% 
+  ggplot(aes(season,n))+
+  geom_col(aes(fill=as.factor(season)))+
+  coord_flip()+
+  theme(legend.position="none")+
+  labs(title="Which Season had the most guest stars",
+       subtitle="Seems Seasons 20 onwards Simpsons started calling up more guest stars",
+       x="Season Number",
+       y="Count of Guest stars")
+
+```
+
+2. Which guest star had the most appearance on Simpsons
+```{r 2,fig.cap='Marcia Wallace & Phil Hartman have the maximum guest appearance',message=FALSE, warning=FALSE, echo=FALSE}
+
+grouped_data  <- simpsons %>% 
+  separate_rows(role, sep = ";\\s+") %>% 
+  na.omit() %>% 
+  mutate(number=parse_number(number)) %>% 
+  count(season,guest_star,sort=TRUE) %>% 
+  group_by(season) %>%
+  top_n(1,wt=n) %>% 
+  mutate(percent=round(n/sum(n),1))  %>% 
+  inner_join(simpsons %>% count(guest_star,sort=TRUE) %>% head(30),by=c("guest_star"))
+  
+grouped_data$Color <- grouped_data$guest_star
+levels(grouped_data$Color) <- colorspace::rainbow_hcl(11)
+
+h<-collapsibleTree(
+    grouped_data,
+    root = "SIMPSONS", 
+    hierarchy = c( "guest_star","season" ,"n.x"), 
+    nodeSize = "percent", 
+    width = 1000, 
+    zoomable = TRUE
+ )
+
+h
+```

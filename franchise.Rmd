@@ -1,0 +1,230 @@
+---
+title: "Media Revenue Franchise - Animated Trend Plot"
+author: "Vaibhav Singh"
+subtitle: "Analysis & visualization of Media Revenue Franchise dataset - Source Wikipedia" 
+date: 2019-11-21T21:13:14-05:00
+categories:  ["Data Blogs"]
+tags: ["Data Visualisation", "Data Analysis","Animated Plot","Bar plot"]
+---
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+
+#Loading Libraries  
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(ggforce)
+library(cowplot)
+library(stringr)
+library(tidyverse)
+library(extrafont)
+library(lubridate)
+library(printr)
+library(knitr)
+library(tidytext)
+library(ggthemes)
+library(reactable)
+library(ggrepel)
+library(gganimate)
+library(gameofthrones)
+library(ggchicklet)
+library(hrbrthemes)
+library(tidyverse)
+library(glue)
+library(drlib)
+theme_set(theme_minimal())
+
+  media_franchises <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-07-02/media_franchises.csv")
+
+```
+
+## Before getting started
+#### Source of Data: \n
+This data comes from Wikipedia and includes franchises that have grossed at least $4 billion usd. \n
+
+Check more about data [here](https://github.com/rfordatascience/tidytuesday/tree/master/data/2019/2019-07-02) & [here](https://en.wikipedia.org/wiki/List_of_highest-grossing_media_franchises).\n
+Another Reddit Post examined this data [here](https://www.reddit.com/r/dataisbeautiful/comments/c53540/highest_grossing_media_franchises_oc/)
+
+Seeking to get answers for below based on dataset: <br/>
+
+1.  Viewing Sample Data -- refer table \@ref(fig:1)<br/> 
+2.  Which are the highest revenue generating category? -- refer plot \@ref(fig:2)<br/>
+3.  Which is the highest Grossing franchise across category? -- refer plot below <br/> 
+4.  Which category of revenue has been growing over time?  -- refer plot \@ref(fig:4)<br/>
+5. Static Version of plot 4 -- Refer last image <br/> 
+
+## Lets get started
+
+1. Viewing Sample Data (Revenue is in USD Billions )
+```{r, 1, fig.cap='Media Franchise Data', echo=FALSE}
+reactable(media_franchises,wrap = FALSE, bordered = TRUE, highlight = TRUE,searchable = TRUE, minRows = 10,resizable = TRUE)
+```
+
+
+2. Which are the highest revenue generating category
+```{r 2, fig.cap="Highest Revenue (USD Billions) by category", message=FALSE, warning=FALSE, echo=FALSE}
+(media_franchises) %>%  group_by(revenue_category) %>% 
+  summarise(sum(revenue), mean(revenue)) %>% 
+  arrange(desc(`sum(revenue)`)) %>%
+  mutate(revenue_category= fct_reorder(revenue_category,`sum(revenue)`)) %>% 
+  ggplot(aes(revenue_category,`sum(revenue)`, fill=revenue_category))+
+  geom_col(show.legend = FALSE)+coord_flip()+
+  labs(title="Highest revenue by category", x="Revenue (Billion $)", y="")
+```
+
+```Merchandising Followed by Games are the highest revenue by category```
+
+3. Do for some franchise movies have been more profitable than Merchandising
+```{r 3, fig.cap='Category wise top earners from worlds biggest franchises (Revenue in USD Billions) ', message=FALSE, warning=FALSE, echo=FALSE, include=FALSE}
+
+media_franchises %>% distinct() %>% 
+  group_by(revenue_category,franchise) %>% 
+  summarise(s=sum(revenue)) %>% 
+  top_n(5) %>% 
+  ungroup(  )%>%
+  mutate(franchise=reorder_within(franchise,s, revenue_category),
+         revenue_category = fct_recode(revenue_category,
+               "Video/Entertainment" = "Home Video/Entertainment",
+               "Video Game" = "Video Games/Games",
+               "Merchandising" = "Merchandise, Licensing & Retail",
+               "Comics or Manga" = "Comic or Manga")) %>% 
+  ggplot(aes(franchise,s, fill=revenue_category))+
+   geom_chicklet(width = 0.75, color = NA, radius = grid::unit(4, "pt")) +
+  scale_fill_got_d(option = "Daenerys")+coord_flip()+
+  facet_wrap(~revenue_category, scales = "free_y")+
+  scale_x_reordered()+
+  labs(title="Category wise top earners from franchises that have grossed at least $4 billion usd", x="",y="Viz by Vaibhav Singh | Source: Wikipedia | vaibhavsingh.netlify.com",
+       subtitle = "Hello Kitty brings in the maximum revenue from merchandising followed by Disney's Mickey Mouse & Pokemon franchise",
+       cation="Viz by Vaibhav Singh | Source: Wikipedia | vaibhavsingh.netlify.com")+
+  theme_ft_rc() +
+  theme(legend.position = "none",
+    plot.title = element_text(color = "#c90a3d", hjust = 0.3, size = 18),
+     strip.background =element_rect(fill="#b5676c"),
+  strip.text = element_text(colour = 'white'))
+```
+![Popular Media across category](/post/franchise_files/Media_static.JPG)
+
+```Hello Kitty Followed by Disney & Pokemon leads the revenue generation```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, }
+
+by_category <- media_franchises %>% 
+  group_by(revenue_category,year_created) %>%
+  count(wt=revenue) %>%
+  bind_rows(media_franchises %>% count(year_created,wt=revenue) %>% mutate(revenue_category="Total Revenue"))
+
+
+by_category$revenue_category <- factor(by_category$revenue_category, levels=c("Merchandise, Licensing & Retail", "Video Games/Games", "Comic or Manga", "Box Office","Total Revenue", "Home Video/Entertainment", "Music", "Book sales", "TV"))
+
+dat_total <- by_category %>% dplyr::filter( revenue_category=="Total Revenue")
+
+#media_franchises$year_created<- lubridate::ymd(media_franchises$year_created, truncated = 2L)
+
+
+dat_text <- data.frame(
+  label = c("LOTR", "The Phantom of The Opera", "Shonen Jump","Star Trek","LOTR","Batman","Pacman","Mickey & Friends","Walt Disney \n(Mickey & Friends)"),
+  revenue_category   = c("Book sales", "Music", "Comic or Manga","TV","Home Video/Entertainment","Box Office","Video Games/Games","Merchandise, Licensing & Retail","Total Revenue"),
+  year_created    = c(1937, 1986, 1968, 1966,1937,1939,1980,1926,1926),
+  n     = c(9, 6, 33,2,4,4,14,74,74))
+
+dat_text2 <- data.frame(
+  label = c("Star Wars","Lion King","Dragon Ball Z","Simpsons","James Bond","Avengers","Mario","Hello Kitty","Sanrio \n(Hello Kitty)"),
+  revenue_category   = c("Book sales","Music","Comic or Manga","TV","Home Video/Entertainment","Box Office","Video Games/Games","Merchandise, Licensing & Retail","Total Revenue"),
+  year_created    = c(1977,1994,1984,1989,1953,1963,1981,1974,1974),
+  n     = c(1,9,9,6,3,12.5,30,80,80))
+
+dat_text3 <- data.frame(
+  label = c("Harry Potter","Friends","One Piece","Frozen","Star Wars","Star Wars","Pokemon","Pokemon","Nintendo \n(Pokemon)"),
+  revenue_category   = c("Book sales","TV","Comic or Manga","Music","Home Video/Entertainment","Box Office","Video Games/Games","Merchandise, Licensing & Retail","Total Revenue"),
+  year_created    = c(1997,1994,1997,2013,1977,1977,1996,1996,1996),
+  n     = c(7,4,10,0.082,9,9,44,61,124))
+
+dat_text4 <- data.frame(
+  label = c("Twilight","Big Bang Theory","Bleach","Spider-Man	","Marvel","MCU","Call of Duty","Frozen","MCU"),
+  revenue_category   = c("Book sales","TV","Comic or Manga","Music","Home Video/Entertainment","Box Office","Video Games/Games","Merchandise, Licensing & Retail","Total Revenue"),
+  year_created    = c(2005,2007,2001,1962,2008,2008,2003,2013,2013),
+  n     = c(1,4,6.740,0.212,5,21,17,9,28))
+
+dat_text5 <- data.frame(
+  label = c("Sesame Street","Fate","Despicable Me","DC Extended Universe","	Monster Strike"),
+  revenue_category   = c("TV","Comic or Manga","Home Video/Entertainment","Box Office","Video Games/Games"),
+  year_created    = c(1955,2004,2010,2013,2013),
+  n     = c(0.096,0.0038,0.686,5.7,7))
+
+m1 <- by_category %>% 
+  ggplot(aes(x=year_created,y=n))+
+  geom_path(aes(color=revenue_category))+
+ geom_point(data = dat_text,aes(x=year_created,n),color = "green", size = 0.8, alpha = 0.35,inherit.aes = FALSE) +
+  geom_point(data = dat_text,aes(x=year_created,n),  color = "red", size = 9, alpha = 0.2,inherit.aes = FALSE) +
+  geom_point(data = dat_text,aes(x=year_created,n),  color = "red", size = 3.3, alpha = 0.5,inherit.aes = FALSE) +
+  geom_point(data = dat_text,aes(x=year_created,n),  color = "red", size = 1.5,inherit.aes = FALSE)+
+  geom_point(data = dat_text2,aes(x=year_created,n),color = "red", size = 0.8, alpha = 0.35,inherit.aes = FALSE) +
+  geom_point(data = dat_text2,aes(x=year_created,n),  color = "red", size = 9, alpha = 0.2,inherit.aes = FALSE) +
+  geom_point(data = dat_text2,aes(x=year_created,n),  color = "red", size = 3.3, alpha = 0.5,inherit.aes = FALSE) +
+  geom_point(data = dat_text2,aes(x=year_created,n),  color = "red", size = 1.5,inherit.aes = FALSE)+
+  geom_point(data = dat_text3,aes(x=year_created,n),color = "green", size = 0.8, alpha = 0.35,inherit.aes = FALSE) +
+  geom_point(data = dat_text3,aes(x=year_created,n),  color = "red", size = 9, alpha = 0.2,inherit.aes = FALSE) +
+  geom_point(data = dat_text3,aes(x=year_created,n),  color = "red", size = 3.3, alpha = 0.5,inherit.aes = FALSE) +
+  geom_point(data = dat_text3,aes(x=year_created,n),  color = "red", size = 1.5,inherit.aes = FALSE)+
+  geom_point(data = dat_text4,aes(x=year_created,n),color = "red", size = 0.8, alpha = 0.35,inherit.aes = FALSE) +
+  geom_point(data = dat_text4,aes(x=year_created,n),  color = "red", size = 9, alpha = 0.2,inherit.aes = FALSE) +
+  geom_point(data = dat_text4,aes(x=year_created,n),  color = "red", size = 3.3, alpha = 0.5,inherit.aes = FALSE) +
+  geom_point(data = dat_text4,aes(x=year_created,n),  color = "red", size = 1.5,inherit.aes = FALSE)+
+  geom_point(data = dat_text5,aes(x=year_created,n),color = "red", size = 0.8, alpha = 0.35,inherit.aes = FALSE) +
+  geom_point(data = dat_text5,aes(x=year_created,n),  color = "red", size = 9, alpha = 0.2,inherit.aes = FALSE) +
+  geom_point(data = dat_text5,aes(x=year_created,n),  color = "red", size = 3.3, alpha = 0.5,inherit.aes = FALSE) +
+  geom_point(data = dat_text5,aes(x=year_created,n),  color = "red", size = 1.5,inherit.aes = FALSE)+
+  facet_wrap(~revenue_category,scales = "free_y")+
+  labs(title="Trends in Media Revenue from Various Categories - Year : {round(frame_along,0)}",
+       subtitle = "The middle graph is the total revenue from across media franchise & others show trend across different category. Quite Clear that Merchandising, Licensing & Retail bring the most revenue followed by Games & Manga.\n Unfortunately Book sales have been dipping & only feature on hero sales !",
+       x="",
+       y="Revenue (Billions $)",
+       caption="Viz by Vaibhav Singh | Source: Wikipedia | vaibhavsingh.netlify.com")+
+  theme_dark(17) +
+  theme(legend.position = "none",
+        text = element_text(colour = "white", family="Arial Narrow"),
+        axis.text = element_text(colour = "white", family="Arial Narrow"),
+        plot.title = element_text(size=22, face = "bold",color = "#c90a3d", hjust = 0.5),
+        plot.subtitle = element_text(size=16,hjust = 0.5),
+        plot.caption = element_text(size = 12, hjust = 1),
+        plot.background = element_rect(fill = "grey10"),
+        panel.background = element_blank(),
+        panel.grid.major = element_line(color = "grey20", size = 0.1),
+        panel.grid.minor = element_blank(),
+        strip.background =element_rect(color="#c90a3d"),
+        #plot.margin = unit(c(4,4,4,4), "cm")
+        plot.margin = margin(5.5, 40, 5.5, 5.5))+
+  theme(legend.position = "none")+
+  geom_text_repel(data = dat_text, mapping = aes(x = year_created, y = n, label = label),fontface ="bold",size=3,family="Orbitron",alpha=0.8,nudge_y = 0,nudge_x =-2.1,colour=c("#41ff24"),segment.alpha=0.4,inherit.aes=FALSE,segment.colour="grey20",min.segment.length = 0.001,arrow = arrow(length = unit(0.01, "npc")), box.padding = 1, seed=123)+
+   geom_text_repel(data = dat_text2, mapping = aes(x = year_created, y = n, label = label),fontface = "bold",size=3,family="Orbitron",alpha=0.8,nudge_y = 5,nudge_x =-2,colour=c("#41ff24"),segment.alpha=0.4,inherit.aes=FALSE,segment.colour="grey20",min.segment.length = 0.001,arrow = arrow(length = unit(0.01, "npc")), box.padding = 2,seed=1234)+
+       geom_text_repel(data = dat_text3, mapping = aes(x = year_created, y = n, label = label),fontface = "bold",size=3,family="Orbitron",alpha=0.8,nudge_y =3,nudge_x =+8.1,colour=c("#41ff24"),segment.alpha=0.4,inherit.aes=FALSE,segment.colour="grey20",min.segment.length = 0.001,arrow = arrow(length = unit(0.01, "npc")), box.padding = 2,seed=12345)+
+  geom_text_repel(data = dat_text4, mapping = aes(x = year_created, y = n, label = label),fontface = "bold",size=3,family="Orbitron",alpha=0.8,nudge_y = 4,nudge_x =2.1,colour=c("#41ff24"),segment.alpha=0.4,inherit.aes=FALSE,segment.colour="grey20",min.segment.length = 0.001,arrow = arrow(length = unit(0.01, "npc")), box.padding = 0.1,seed=123567)+
+  geom_text_repel(data = dat_text5, mapping = aes(x = year_created, y = n, label = label),fontface = "bold",size=3,family="Orbitron",alpha=0.8,nudge_y = -1,nudge_x =+12.1,colour=c("#41ff24"),segment.alpha=0.4,inherit.aes=FALSE,segment.colour="grey20",arrow = arrow(length = unit(0.001, "npc")), box.padding = 0.1,seed=123567)+
+transition_reveal(year_created)+
+ ease_aes('linear')+
+  scale_x_continuous(expand = c(0, 0), breaks = seq(1920, 2020, by = 20), 
+                     limits = c(1900, 2040)) +
+  geom_rect(data=dat_total,aes(xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=Inf), fill='grey20', alpha=0.3, size=6)+
+   scale_color_brewer(palette="Paired")
+  #  exit_fade()+
+  # geom_text(x = 1000 , y = -10,
+  #           family = "Times",
+  #           aes(label = as.character(year)),
+  #           size = 30, col = "grey18") 
+
+anim <- animate(m1, fps=3, end_pause = 60, height = 800, width =1800,res=100, rewind=TRUE)
+
+anim_save("final.gif", anim)
+  
+```
+
+4. Trend from 1926 to 2010 for popular franchise (Right click + Open in new window to see full screen)
+
+```{r 4, fig.cap='Trend of popular franchise & their revenue stream ', echo=FALSE}
+anim
+```
+
+
+5. Static Version of Media Franchise Trend
+![Static Version of Media Franchise Trend](/post/franchise_files/static_media.png)
