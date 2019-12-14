@@ -1,0 +1,268 @@
+---
+title: 'Bob Ross Paintings: Percentile Plot '
+author: Vaibhav Singh
+date: '2019-12-13'
+categories:
+  - Data Blogs
+tags:
+  - Animated Plot
+  - Wide Data
+subtitle: This post analyses Bob Ross Paintings from his PBS TV show The joy of painting  -
+  Source fivethiryeight
+---
+
+
+```{r global options, include = FALSE}
+knitr::opts_chunk$set(echo=TRUE, include = TRUE, warning=FALSE, message=FALSE)
+
+```
+
+
+```{r echo=FALSE}
+library(tidyverse)
+library(osmdata)
+library(janitor)
+library(ggplot2)
+library(extrafont)
+library(showtext)
+library(ggrepel)
+library(rcartocolor)
+library(reactable)
+library(tidytuesdayR)
+library(treemap)
+library(d3treeR)
+library(glue)
+library(snakecase)
+library(patchwork)
+library(gganimate)
+
+theme_set(theme_minimal())
+```
+
+# Bob Ross's Paintings from TV show "The Joy of Painting"
+
+## Before getting started
+
+#### Source of Data : \n
+First to all those people who are not aware of Bob Ross (like Me), he was an American Painter & TV host, his painted on his show & this dataset is born out of videos from his TV show\n
+
+Read more about Bob Ross [here](https://en.wikipedia.org/wiki/Bob_Ross) and read about data set
+[here](https://github.com/rfordatascience/tidytuesday/tree/master/data/2019/2019-08-06)
+
+This data basically is of wide data format showcasing each episode & the elements of his paintings. Its a good excersize for someone looking to explore & work around wide data sets. It has 403 rows & 69 columns, hence classifying it as wide data
+
+*Based on structure of data, seeking to get answers for below based on dataset: <br/>*
+
+ <span style="color:red">
+1. What were the famous elements in Bob Ross paintings? <br/> 
+2. Which elements were Bob Ross's favorite in his paintings. Did it change over 31 seasons? <br/>
+</span>
+
+## Lets get started
+
+
+```{r echo=FALSE}
+tuesdata <- tidytuesdayR::tt_load(2019, week = 32)
+
+bob <- (tuesdata$`bob-ross`)
+
+reactable(bob,
+    defaultColDef = colDef(
+    header = function(value) toupper(gsub("_", " ", value, fixed = TRUE)),
+    cell = function(value) format(value, nsmall = 1),
+    align = "center",
+    minWidth = 120,
+    headerStyle = list(background = "#a0a0de")
+  ),
+  columns = list(
+    TITLE = colDef(width = 200),
+    EPISODE=colDef(width = 350)# overrides the default
+  ),
+  wrap = FALSE, bordered = TRUE, highlight = TRUE,searchable = TRUE, minRows = 10,resizable = TRUE, outlined=TRUE, striped = TRUE)
+
+```
+
+
+First step in analysinsg this type of data (i.e wide data) is to convert it to long format. Below code converts data in original format (as above) to long data as can be viewed below
+```{r}
+bob_clean <-   bob %>% 
+  clean_names() %>% 
+  pivot_longer(c(-episode,-title),names_to = "Elements",values_to = "Times") %>%  
+  filter(Times==1) %>% 
+  mutate(title = str_to_title(str_remove_all(title, '"')),
+         Elements = str_to_title(str_replace(Elements, "_", " ")))  %>%
+  extract(episode, c("season", "episode_number"), "S(.*)E(.*)", convert = TRUE, remove = FALSE) %>% 
+  select(-Times) %>% 
+  mutate(Elements=fct_recode(Elements,
+               "Trees" = "Tree")) %>% 
+  distinct()
+  
+
+reactable(bob_clean,
+    defaultColDef = colDef(
+    header = function(value) toupper(gsub("_", " ", value, fixed = TRUE)),
+    cell = function(value) format(value, nsmall = 1),
+    align = "center",
+    minWidth = 120,
+    headerStyle = list(background = "#a0a0de")
+  ),
+  columns = list(
+    title = colDef(width = 300)
+  ),
+  wrap = FALSE, bordered = TRUE, highlight = TRUE,searchable = TRUE, minRows = 10,resizable = TRUE, outlined=TRUE, striped = TRUE)
+
+```
+
+Now this data is easier to analyse & can be utilised for various plotting behvaiour. Going back to our questions
+
+### 2. Exploratory Data Analysis 
+
+**1. Number of episodes & Seasons of the Joy of Painting**
+```{r 1, fig.cap="31 Seasons & 13 episodes in each, Quite Consistent Mr.Ross"}
+
+bob %>% 
+  extract(EPISODE,c("Season","Episode"),"S(.*)E(.*)") %>% 
+  select(Season,Episode) %>%
+  group_by(Season) %>% 
+  mutate(Episode=as.numeric(Episode),num=max(Episode)) %>% 
+  filter(Episode==1) %>% 
+  ggplot(aes(Season,num,group=1))+
+  geom_line()+
+  labs(title="13 Episodes for 31 Seasons, Thats some consistency",
+       x="Total Episodes")
+
+```
+
+**2. Which elements were Bob Ross's favorite in his paintings. Did it change over 31 seasons?**
+```{r echo=FALSE}
+
+elements <- bob_clean %>% count(Elements,season,sort=T)
+
+highlight_elements <- c(
+  'Trees',
+  'Clouds',
+  'Conifer',
+  'Deciduous',
+  'Mountain',
+  'Lake'
+  # 'Grass',
+  # 'River',
+  # 'Bushes'
+)
+
+highlight_colors <- c(
+  '#1eff00',
+  '#08bcff',
+  '#499989',
+  '#5fa73f',
+  '#ff8706',
+  '#023af2',
+  '#f5b901',
+  #'#c988d2',
+  #'#6da5c2',
+  #'#def202',
+  #'#6e02f2',
+  '#fa6000',
+  '#9a91fa',
+  '#e302cc'
+)
+
+ranking_elements <- elements %>%
+  # mutate(
+  #   year = as.integer(year),
+  #   parkname = str_to_upper(parkname)
+  # ) %>%
+  group_by(season) %>%
+  arrange(season, desc(n)) %>%
+  mutate(rank = row_number()) %>%
+  ungroup()
+
+top_elements <- ranking_elements %>%
+  filter(Elements %in% c(highlight_elements,'Winter','Waves','Sun','Palm Trees')) %>%
+  mutate(Elements = fct_relevel(Elements, highlight_elements)) %>%
+  arrange(season, desc(Elements))
+
+# 
+# bottom_elements <- ranking_elements %>%
+#   filter(Elements %in% c('Winter','Waves','Sun','Palm Trees')) %>%
+#   mutate(Elements = fct_relevel(Elements, highlight_elements)) %>%
+#   arrange(season, (Elements))
+
+
+other_elements <- ranking_elements %>%
+  filter(!Elements %in% highlight_elements)
+
+```
+
+```{r}
+
+```
+
+
+```{r echo=FALSE}
+
+animation <- top_elements %>%
+  ggplot(aes(x = season, y = rank, group = Elements, color = Elements)) +
+   geom_line(
+     data = other_elements, size = 0.5, show.legend = FALSE, color = 'grey20'
+   ) +
+  geom_line(show.legend = FALSE, size = 0.8) +
+  geom_text(
+    aes(x = season, label = Elements),
+    size = 4.25, show.legend = FALSE, hjust = 0, fontface = 'bold'
+  ) +
+  scale_x_continuous(breaks = c(1, 5, 10, 15,20,25,30)) +
+  scale_y_continuous(
+    breaks = c(1,5,10, 25, 30), labels = c('1st','5th','10th', '-5th', '-1st'), trans = 'reverse'
+  ) +
+  scale_color_manual(values = highlight_colors) +
+  coord_cartesian(clip = 'off') +
+  transition_reveal(season, keep_last = TRUE) +
+  labs(
+    title = 'The most & least popular elements that appear in the paintings created by Bob Ross on his TV show',
+    subtitle = 'The Joy of Painting that aired for 31 seasons & 403 episodes on PBS had a distinct following. This visualization aims to analyse whether few elements  \n   were more favoured in his paintings than rest. Bob Ross preferred Trees/Lakes Person over Beaches',
+    x = 'Season',
+    y = 'Percentile',
+    caption = 'Data Source: FiveThirtyEight'
+  ) +
+  theme(
+    plot.background = element_rect(fill = '#000000'),
+    plot.margin = margin(t = 10, r = 155, b = 20, l = 20),
+    plot.title = element_text(
+      margin = margin(b = 10), size = 19, hjust = 0.15, face = 'bold',
+      color = '#ffffff'
+    ),
+    plot.subtitle = element_text(
+      margin = margin(t = 0, b = 0), size = 13, hjust = 0,
+      face = 'plain', color = '#ffffff'
+    ),
+    plot.caption = element_text(
+      color = '#999999', size = 13, margin = margin(t = 10), hjust = 0.5,
+      face = 'plain', family = 'Decima Mono Pro'
+    ),
+    panel.background = element_rect(fill = '#000000'),
+    panel.grid.major = element_line(size = 0.5, color = '#47acb5'),
+     panel.grid.minor = element_blank(),
+    panel.border = element_blank(),
+    axis.text.x = element_text(
+      family = 'Decima Mono Pro', color = '#ff0000', face = 'plain', size = 20
+      #margin = margin(t = 6)
+    ),
+    axis.text.y = element_text(
+      family = 'Decima Mono Pro', color = '#ff0000', face = 'plain', size = 20,
+      margin = margin(r = 6)
+    ),
+    axis.title.y = element_text(color = '#d9ff00', face = 'bold', size = 16),
+    axis.title.x = element_text(color = '#d9ff00', face = 'bold', size = 16)
+  )
+
+p1 <- animate(animation, width = 1000, height = 600, end_pause = 30,fps = 2)
+
+anim_save('popular_elements_bob_ross.gif')
+```
+
+
+```{r 2, echo=FALSE,fig.cap="Rank plot showing most & least popular elements in Bob Ross paintings"}
+p1
+```
+
